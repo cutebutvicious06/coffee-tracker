@@ -1,6 +1,0 @@
-name: Coffee Tracker
-description: Remembers where my coffee cup was last seen.
-ports: []
-bricks:
-- arduino:video_object_detection: {}
-icon: ☕

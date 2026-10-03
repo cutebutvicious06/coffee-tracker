@@ -1,0 +1,6 @@
+name: Coffee Tracker Spike
+description: Prints raw detection dicts to learn the box format. Run this first.
+ports: []
+bricks:
+- arduino:video_object_detection: {}
+icon: ☕
