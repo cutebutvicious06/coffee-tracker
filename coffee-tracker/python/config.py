@@ -31,8 +31,9 @@ PERSON_LABEL = "person"
 # --- Frame and zones -------------------------------------------------
 
 # Size of the coordinate space the boxes are reported in.
-FRAME_W = 640  # TODO(verify-on-board): spike "MAX x2/y2" tells us
-FRAME_H = 480  # TODO(verify-on-board): may be the model input size instead
+# Verified on board 2026-10-03 (spike, Brio 100): max box corner = 640, 480.
+FRAME_W = 640
+FRAME_H = 480
 
 # Named zones as fractions of the frame: (left, top, right, bottom),
 # each from 0.0 to 1.0. The first zone containing the cup's centre wins.

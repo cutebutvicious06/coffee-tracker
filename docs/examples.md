@@ -67,5 +67,7 @@ an Arduino sketch). Camera/mic examples need **Network Mode** + a powered USB-C 
   `KeywordSpotting()`, `LargeLanguageModel()`), **and** declared in `app.yaml`.
 - Browser side always uses `libs/arduino.js` + `socket.io` → `new WebUI()`,
   `ui.on_message(...)`, `ui.send_message(...)`. Web UI is on port **7000**.
-- **No example uses bounding-box coordinates** in Python. Whether the
-  detection dict contains box positions is unverified.
+- **No example uses bounding-box coordinates** in Python, but the brick
+  provides them. Verified on the board (spike, 2026-10-03):
+  `{label: [{"confidence": 0.81, "bounding_box_xyxy": (511, 357, 640, 480)}]}`
+  — boxes are in camera pixels, 640x480.
