@@ -37,8 +37,7 @@ function showState(s) {
     $('lastTime').textContent = `${when} (${ago} s ago)`;
   }
 
-  $('debugSummary').textContent =
-    `me in view: ${s.me_in_view} | cup absent: ${s.cup_absent_sec.toFixed(1)} s | lost: ${s.lost}`;
+  showDebug(s);
   if (s.last_raw_time) {
     const age = (s.now - s.last_raw_time).toFixed(1);
     // One line per detection: label, confidence, box (x1, y1, x2, y2)
@@ -49,6 +48,45 @@ function showState(s) {
       }
     }
     $('debugRaw').textContent = `last detections (${age} s ago):\n` + lines.join('\n');
+  }
+}
+
+// --- Debug panel -------------------------------------------------------
+function showDebug(s) {
+  $('debugSummary').textContent =
+    `score: ${s.score.toFixed(2)} / ${s.score_max} (seen at ${s.seen_score}) | seen: ${s.seen}` +
+    ` | me in view: ${s.me_in_view} | cup absent: ${s.cup_absent_sec.toFixed(1)} s | lost: ${s.lost}`;
+
+  let anchor = `anchor: ${s.anchor_status}`;
+  if (s.anchor_box) {
+    anchor += ` | box [${s.anchor_box.join(', ')}] | last confident cup ${s.anchor_age.toFixed(1)} s ago`;
+  }
+  $('debugAnchor').textContent = anchor;
+
+  $('debugFlags').textContent = Object.entries(s.flags)
+    .map(([name, on]) => `${name}=${on ? 'on' : 'OFF'}`).join('  ');
+
+  const tbody = $('cupTable').querySelector('tbody');
+  tbody.innerHTML = '';
+  if (s.cup_decisions_time) {
+    const age = (s.now - s.cup_decisions_time).toFixed(1);
+    $('cupTitle').textContent = `Cups in last frame with cups (${age} s ago)`;
+    for (const c of s.cup_decisions) {
+      const row = document.createElement('tr');
+      row.className = c.accepted ? c.strength : 'rejected';
+      const cells = [
+        c.confidence.toFixed(2),
+        c.accepted ? c.strength : 'rejected',
+        c.reason,
+        c.anchor_distance === null ? '-' : c.anchor_distance,
+      ];
+      for (const text of cells) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        row.appendChild(td);
+      }
+      tbody.appendChild(row);
+    }
   }
 }
 

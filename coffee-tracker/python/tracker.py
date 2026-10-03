@@ -104,7 +104,7 @@ def judge_cup(cup, state, me_in_view, now):
     distance = None
     anchor = anchor_status(state, now) if config.USE_ANCHOR else "off"
     if state.anchor_box is not None and config.USE_ANCHOR:
-        distance = center_distance(box, state.anchor_box)
+        distance = round(center_distance(box, state.anchor_box))
     near = anchor == "active" and distance <= config.ANCHOR_NEAR_PX
 
     def verdict(accepted, strength, reason):
@@ -114,7 +114,7 @@ def judge_cup(cup, state, me_in_view, now):
             "accepted": accepted,
             "strength": strength,
             "reason": reason,
-            "anchor_distance": None if distance is None else round(distance),
+            "anchor_distance": distance,
         }
 
     if conf >= start:
@@ -285,5 +285,12 @@ def to_dict(state, now):
     d["status"] = status_text(state, now)
     d["anchor_status"] = anchor_status(state, now) if config.USE_ANCHOR else "off"
     d["anchor_age"] = None if state.anchor_time is None else now - state.anchor_time
+    d["score_max"] = config.SCORE_MAX
+    d["seen_score"] = config.SEEN_SCORE
+    d["flags"] = {
+        name: getattr(config, name)
+        for name in ("FILTER_LABELS", "USE_PERSON_BOOST", "USE_ANCHOR",
+                     "USE_ANCHOR_TTL", "USE_EVIDENCE_SCORE")
+    }
     d["now"] = now
     return d
