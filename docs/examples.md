@@ -1,6 +1,6 @@
 # Reference examples — summaries
 
-Source: `reference:./` (folder name has a stray `:.` — see note at bottom) and
+Source: `reference/` and
 `useme/*.zip`. Edge AI Assistant exists **only** as a zip in `useme/`.
 
 All examples target the **Arduino UNO Q** (Linux side runs Python, MCU side runs
@@ -69,7 +69,3 @@ an Arduino sketch). Camera/mic examples need **Network Mode** + a powered USB-C 
   `ui.on_message(...)`, `ui.send_message(...)`. Web UI is on port **7000**.
 - **No example uses bounding-box coordinates** in Python. Whether the
   detection dict contains box positions is unverified.
-
-## Note
-The folder is literally named `reference:.` (not `reference/`), probably an
-upload glitch. Left untouched (read-only rule).
