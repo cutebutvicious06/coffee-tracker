@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coffee Tracker</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>☕ Coffee Tracker</h1>
+
+    <div id="error" class="error" hidden></div>
+
+    <div id="status" class="status">Waiting for the board…</div>
+
+    <div class="layout">
+      <div class="video">
+        <div id="videoPlaceholder" class="placeholder">Searching for the camera…</div>
+        <iframe id="videoFrame" title="Video stream" hidden></iframe>
+      </div>
+
+      <div class="side">
+        <section class="card">
+          <h2>Last seen</h2>
+          <p class="big" id="lastZone">—</p>
+          <p id="lastTime">Not seen yet</p>
+        </section>
+
+        <section class="card">
+          <h2>Ask</h2>
+          <p>Say <b>"Hey Arduino"</b> or press Ask.</p>
+          <p class="answer" id="answer">—</p>
+          <button id="voiceBtn">Enable voice</button>
+          <button id="askBtn">Ask now</button>
+        </section>
+      </div>
+    </div>
+
+    <details class="card debug">
+      <summary>Debug</summary>
+      <p id="debugSummary"></p>
+      <pre id="debugRaw">No detections yet</pre>
+    </details>
+
+    <script src="libs/socket.io.min.js"></script>
+    <script src="libs/arduino.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
