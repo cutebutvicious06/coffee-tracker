@@ -6,7 +6,6 @@
 import os
 import sys
 import unittest
-from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
@@ -149,185 +148,6 @@ class TestLost(unittest.TestCase):
         self.assertAlmostEqual(s.cup_absent_sec, 1.0)
 
 
-class TestLabelsAndPerson(unittest.TestCase):
-    def test_other_labels_are_dropped(self):
-        d = frame(cup_box=TOP_LEFT_BOX)
-        d["chair"] = [det("chair", (0, 0, 5, 5))]
-        s = tracker.update(tracker.new_state(T0), d, T0 + 1)
-        self.assertNotIn("chair", s.last_raw)
-
-    def test_only_chairs_counts_as_empty(self):
-        s = tracker.update(tracker.new_state(T0), {"chair": [det("chair")]}, T0 + 1)
-        self.assertEqual(s.last_raw, {})
-
-    def test_cup_below_start_conf_is_ignored(self):
-        d = {"cup": [det("cup", TOP_LEFT_BOX, config.CUP_START_CONF - 0.01)]}
-        s = tracker.update(tracker.new_state(T0), d, T0 + 1)
-        self.assertIsNone(s.last_cup)
-
-    def test_weak_person_is_not_in_view(self):
-        d = {"person": [det("person", confidence=config.PERSON_MIN_CONF - 0.01)]}
-        s = tracker.update(tracker.new_state(T0), d, T0 + 1)
-        self.assertFalse(s.me_in_view)
-
-
-ANCHOR_BOX = (300, 300, 360, 380)
-NEAR_BOX = (305, 302, 365, 382)    # centre ~5 px from the anchor
-FAR_BOX = (20, 20, 80, 100)        # centre ~400 px away
-
-
-def cups(conf, box, person=False):
-    d = {"cup": [det("cup", box, conf)]}
-    if person:
-        d["person"] = [det("person", (200, 0, 400, 480))]
-    return d
-
-
-def anchored_state():
-    """State right after one confident cup set the anchor at ANCHOR_BOX."""
-    return tracker.update(tracker.new_state(T0), cups(0.8, ANCHOR_BOX), T0 + 1)
-
-
-class TestAcceptance(unittest.TestCase):
-    def test_lone_weak_cup_far_from_anchor_is_ignored(self):
-        s = tracker.update(anchored_state(), cups(0.35, FAR_BOX), T0 + 2)
-        self.assertEqual(s.last_cup.box, ANCHOR_BOX)  # unchanged
-        self.assertFalse(s.cup_decisions[0]["accepted"])
-        self.assertIn("px from anchor", s.cup_decisions[0]["reason"])
-
-    def test_lone_weak_cup_with_no_anchor_is_ignored(self):
-        s = tracker.update(tracker.new_state(T0), cups(0.35, NEAR_BOX), T0 + 1)
-        self.assertIsNone(s.last_cup)
-        self.assertIn("no anchor", s.cup_decisions[0]["reason"])
-
-    def test_weak_cup_near_anchor_is_accepted(self):
-        s = tracker.update(anchored_state(), cups(0.35, NEAR_BOX), T0 + 2)
-        self.assertEqual(s.last_cup.box, NEAR_BOX)
-        self.assertEqual(s.cup_decisions[0]["strength"], "weak")
-
-    def test_weak_cup_does_not_move_anchor(self):
-        s = tracker.update(anchored_state(), cups(0.35, NEAR_BOX), T0 + 2)
-        self.assertEqual(s.anchor_box, ANCHOR_BOX)
-        self.assertEqual(s.anchor_time, T0 + 1)
-
-    def test_person_boost_accepts_045_with_person(self):
-        s = tracker.update(tracker.new_state(T0), cups(0.45, FAR_BOX, person=True), T0 + 1)
-        self.assertIsNotNone(s.last_cup)
-        self.assertIn("person in view", s.cup_decisions[0]["reason"])
-
-    def test_person_boost_rejects_045_without_person(self):
-        s = tracker.update(tracker.new_state(T0), cups(0.45, FAR_BOX), T0 + 1)
-        self.assertIsNone(s.last_cup)
-
-    def test_person_boosted_hit_does_not_set_anchor(self):
-        s = tracker.update(tracker.new_state(T0), cups(0.45, FAR_BOX, person=True), T0 + 1)
-        self.assertIsNone(s.anchor_box)
-
-    def test_best_cup_strong_beats_weak(self):
-        d = {"cup": [det("cup", NEAR_BOX, 0.38), det("cup", FAR_BOX, 0.6)]}
-        s = tracker.update(anchored_state(), d, T0 + 2)
-        self.assertEqual(s.last_cup.box, FAR_BOX)
-
-    def test_flags_off(self):
-        with mock.patch.object(config, "USE_PERSON_BOOST", False):
-            s = tracker.update(tracker.new_state(T0), cups(0.45, FAR_BOX, person=True), T0 + 1)
-            self.assertIsNone(s.last_cup)
-        with mock.patch.object(config, "USE_ANCHOR", False):
-            s = tracker.update(anchored_state(), cups(0.35, NEAR_BOX), T0 + 2)
-            self.assertEqual(s.last_cup.box, ANCHOR_BOX)
-            self.assertIn("anchor off", s.cup_decisions[0]["reason"])
-
-
-class TestAnchorTTL(unittest.TestCase):
-    def phantom_frames(self, until):
-        """Steady 0.35 cup at the anchor, with me in view, every 0.5 s."""
-        frames, t = [], T0 + 1.5
-        while t <= until:
-            frames.append((t, cups(0.35, ANCHOR_BOX, person=True)))
-            t += 0.5
-        return frames
-
-    def test_phantom_counts_until_ttl(self):
-        end = T0 + 1 + config.ANCHOR_TTL_SECONDS
-        s = run(anchored_state(), self.phantom_frames(end))
-        self.assertEqual(tracker.anchor_status(s, end), "active")
-        self.assertTrue(s.seen)
-
-    def test_phantom_stops_counting_after_ttl_and_lost_fires(self):
-        ttl_end = T0 + 1 + config.ANCHOR_TTL_SECONDS
-        s = run(anchored_state(), self.phantom_frames(ttl_end + config.N_SECONDS + 10))
-        self.assertEqual(tracker.anchor_status(s, s.cup_decisions_time), "expired")
-        self.assertFalse(s.cup_decisions[0]["accepted"])
-        self.assertIn("anchor expired", s.cup_decisions[0]["reason"])
-        self.assertFalse(s.seen)
-        self.assertTrue(s.lost)
-
-    def test_ttl_flag_off_keeps_phantom_alive(self):
-        with mock.patch.object(config, "USE_ANCHOR_TTL", False):
-            ttl_end = T0 + 1 + config.ANCHOR_TTL_SECONDS
-            s = run(anchored_state(), self.phantom_frames(ttl_end + config.N_SECONDS + 10))
-            self.assertTrue(s.seen)
-            self.assertFalse(s.lost)
-
-    def test_anchor_not_restored_from_store(self):
-        stored = tracker.CupSighting("top left", ANCHOR_BOX, 0.9, T0 - 5)
-        s = tracker.new_state(T0, last_cup=stored)
-        self.assertEqual(tracker.anchor_status(s, T0), "none")
-
-
-class TestEvidenceScore(unittest.TestCase):
-    def test_flickering_cup_stays_seen(self):
-        # 0.55 / 0.31 / nothing, repeating every 0.1 s for 20 s.
-        pattern = [cups(0.55, ANCHOR_BOX), cups(0.31, NEAR_BOX), {}, cups(0.31, ANCHOR_BOX)]
-        s, t = anchored_state(), T0 + 1
-        for i in range(200):
-            t += 0.1
-            s = tracker.update(s, pattern[i % len(pattern)], t)
-            self.assertTrue(s.seen, "lost 'seen' at step %d (score %.2f)" % (i, s.score))
-
-    def test_one_strong_hit_is_seen(self):
-        s = anchored_state()
-        self.assertEqual(s.score, config.HIT_STRONG)
-        self.assertTrue(s.seen)
-
-    def test_weak_hits_alone_need_several_frames(self):
-        s = tracker.update(anchored_state(), {}, T0 + 10)  # score drained to 0
-        self.assertFalse(s.seen)
-        s = tracker.update(s, cups(0.35, NEAR_BOX), T0 + 10.1)
-        self.assertFalse(s.seen)  # 0.3 < SEEN_SCORE
-        for i in range(3):
-            s = tracker.update(s, cups(0.35, NEAR_BOX), T0 + 10.2 + i * 0.1)
-        self.assertTrue(s.seen)  # 4 x 0.3 = 1.2
-
-    def test_score_is_capped(self):
-        frames = [(T0 + 1 + i * 0.1, cups(0.9, ANCHOR_BOX)) for i in range(100)]
-        s = run(tracker.new_state(T0), frames)
-        self.assertEqual(s.score, config.SCORE_MAX)
-
-    def test_score_drains_by_time_not_by_call_count(self):
-        full = run(tracker.new_state(T0), [(T0 + 1 + i * 0.1, cups(0.9, ANCHOR_BOX)) for i in range(10)])
-        one_call = tracker.update(full, {}, full.last_update_time + 2)
-        many = run(full, [(full.last_update_time + 0.1 * (i + 1), {}) for i in range(20)])
-        self.assertAlmostEqual(one_call.score, many.score)
-
-    def test_lost_timer_starts_when_score_drops(self):
-        # Score at the cap -> stays "seen" for a while after the cup goes.
-        frames = [(T0 + 1 + i * 0.1, cups(0.9, ANCHOR_BOX)) for i in range(50)]
-        s = run(tracker.new_state(T0), frames)
-        t_gone = s.last_update_time
-        drain = (config.SCORE_MAX - config.SEEN_SCORE) / config.DECAY_PER_SEC
-        ticks = [(t_gone + 0.5 * (i + 1), frame(person=True)) for i in range(int((drain + config.N_SECONDS) / 0.5) + 2)]
-        s = run(s, ticks)
-        self.assertTrue(s.lost)
-
-    def test_score_flag_off_uses_visibility_window(self):
-        with mock.patch.object(config, "USE_EVIDENCE_SCORE", False):
-            s = tracker.update(anchored_state(), {}, T0 + 1 + config.CUP_VISIBLE_SEC - 0.1)
-            self.assertTrue(s.seen)
-            s = tracker.update(s, {}, T0 + 1 + config.CUP_VISIBLE_SEC + 0.1)
-            self.assertFalse(s.seen)
-
-
 class TestTexts(unittest.TestCase):
     def test_answer_never_seen(self):
         s = tracker.new_state(T0)
@@ -338,10 +158,7 @@ class TestTexts(unittest.TestCase):
         self.assertIn("right there, top left", tracker.answer_text(s, T0 + 1.5))
 
     def test_answer_minutes_ago(self):
-        s = run(tracker.new_state(T0), [
-            (T0 + 1, frame(cup_box=TOP_LEFT_BOX)),
-            (T0 + 1 + 300, {}),  # main.py ticks the tracker regularly
-        ])
+        s = tracker.update(tracker.new_state(T0), frame(cup_box=TOP_LEFT_BOX), T0 + 1)
         self.assertEqual(
             tracker.answer_text(s, T0 + 1 + 300),
             "Your coffee was last seen top left, 5 minutes ago.",

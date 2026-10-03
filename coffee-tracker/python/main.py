@@ -14,7 +14,7 @@ import store
 import tracker
 
 ui = WebUI()
-detection_stream = VideoObjectDetection(confidence=config.CONF_FLOOR, debounce_sec=0.0)
+detection_stream = VideoObjectDetection(confidence=config.CONFIDENCE, debounce_sec=0.0)
 spotter = KeywordSpotting()  # TODO(verify-on-board): does the app still start with no mic plugged in?
 
 # Detection callbacks run on brick threads, the loop below on the main
