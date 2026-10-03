@@ -15,6 +15,10 @@ N_SECONDS = 10.0  # TODO(verify-on-board): tune after real use
 # and detections flicker frame to frame.
 PERSON_TIMEOUT_SEC = 2.0  # TODO(verify-on-board): tune for flicker
 
+# A cup seen within this many seconds counts as "in view right now"
+# (for the spoken answer and the status line).
+CUP_VISIBLE_SEC = 2.0
+
 # How often main.py re-checks the timer when no detections arrive.
 TICK_SEC = 0.5
 
