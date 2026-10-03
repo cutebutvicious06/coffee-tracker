@@ -16,6 +16,19 @@ videoFrame.onload = () => {
   videoFrame.hidden = false;
 };
 
+// Fullscreen the box around the iframe (not the iframe itself), so our
+// button stays on top and Esc or the button brings you back.
+$('fullscreenBtn').onclick = () => {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    $('videoBox').requestFullscreen();
+  }
+};
+document.addEventListener('fullscreenchange', () => {
+  $('fullscreenBtn').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+});
+
 // --- Connection to Python ---------------------------------------------
 const ui = new WebUI();
 ui.on_connect(() => { $('error').hidden = true; });
