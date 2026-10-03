@@ -26,6 +26,8 @@ class State:
     last_cup: Optional[CupSighting] = None  # last ACCEPTED cup
     last_me_time: Optional[float] = None
     me_in_view: bool = False
+    score: float = 0.0  # evidence score for the cup
+    last_update_time: Optional[float] = None
     seen: bool = False  # is the cup currently "seen"?
     last_seen_time: Optional[float] = None
     cup_absent_sec: float = 0.0
@@ -145,6 +147,21 @@ def pick_best(verdicts):
     return max(accepted, key=lambda v: (v["strength"] == "strong", v["confidence"]))
 
 
+def update_score(state, best, now):
+    """New evidence score: add for a hit, drain by time for a miss.
+
+    Draining by elapsed SECONDS (not per call) matters because update()
+    is called irregularly: every frame with detections, plus a tick every
+    TICK_SEC when the brick sends nothing.
+    """
+    score = state.score
+    if best is not None:
+        score += config.HIT_STRONG if best["strength"] == "strong" else config.HIT_WEAK
+    elif state.last_update_time is not None:
+        score -= config.DECAY_PER_SEC * (now - state.last_update_time)
+    return min(max(score, 0.0), config.SCORE_MAX)
+
+
 # --- The main update ---------------------------------------------------
 
 def update(state, detections, now):
@@ -183,9 +200,15 @@ def update(state, detections, now):
         if best["confidence"] >= config.CUP_START_CONF:
             anchor_box, anchor_time = best["box"], now
 
-    # 3. Is the cup "seen"? Accepted within the last CUP_VISIBLE_SEC.
-    last_seen_time = now if best is not None else state.last_seen_time
-    seen = last_seen_time is not None and now - last_seen_time < config.CUP_VISIBLE_SEC
+    # 3. Is the cup "seen"?
+    score = update_score(state, best, now)
+    if config.USE_EVIDENCE_SCORE:
+        seen = score >= config.SEEN_SCORE
+        last_seen_time = now if seen else state.last_seen_time
+    else:
+        # Simple version: accepted within the last CUP_VISIBLE_SEC.
+        last_seen_time = now if best is not None else state.last_seen_time
+        seen = last_seen_time is not None and now - last_seen_time < config.CUP_VISIBLE_SEC
 
     # 4. Absence: counted from the last moment the cup was seen, but
     #    never from before the app started (a sighting loaded from
@@ -203,6 +226,8 @@ def update(state, detections, now):
         last_cup=last_cup,
         last_me_time=last_me_time,
         me_in_view=me_in_view,
+        score=score,
+        last_update_time=now,
         seen=seen,
         last_seen_time=last_seen_time,
         cup_absent_sec=cup_absent_sec,
@@ -258,7 +283,7 @@ def to_dict(state, now):
     """Everything the web page needs, as plain JSON-friendly data."""
     d = asdict(state)
     d["status"] = status_text(state, now)
-    d["anchor_status"] = anchor_status(state, now)
+    d["anchor_status"] = anchor_status(state, now) if config.USE_ANCHOR else "off"
     d["anchor_age"] = None if state.anchor_time is None else now - state.anchor_time
     d["now"] = now
     return d

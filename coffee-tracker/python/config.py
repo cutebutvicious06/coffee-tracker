@@ -54,6 +54,16 @@ ANCHOR_NEAR_PX = 40  # TODO(verify-on-board): about half a cup's width?
 USE_ANCHOR_TTL = True
 ANCHOR_TTL_SECONDS = 30.0  # TODO(verify-on-board)
 
+# Evidence score: accepted hits add to it, missing time drains it.
+# The cup is "seen" while score >= SEEN_SCORE. With the flag off, "seen"
+# means "accepted within the last CUP_VISIBLE_SEC" (the simple version).
+USE_EVIDENCE_SCORE = True
+HIT_STRONG = 1.0     # per frame with a strong cup
+HIT_WEAK = 0.3       # per frame with only a weak near-anchor cup
+DECAY_PER_SEC = 1.0  # TODO(verify-on-board): drain per second with no accepted cup
+SEEN_SCORE = 1.0     # one strong hit is enough to be "seen"
+SCORE_MAX = 5.0      # cap: at most (SCORE_MAX - SEEN_SCORE) / DECAY_PER_SEC = 4 s of "memory"
+
 # Person must reach this to count as "in view".
 PERSON_MIN_CONF = 0.5  # TODO(verify-on-board)
 

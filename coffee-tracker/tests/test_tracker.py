@@ -275,6 +275,59 @@ class TestAnchorTTL(unittest.TestCase):
         self.assertEqual(tracker.anchor_status(s, T0), "none")
 
 
+class TestEvidenceScore(unittest.TestCase):
+    def test_flickering_cup_stays_seen(self):
+        # 0.55 / 0.31 / nothing, repeating every 0.1 s for 20 s.
+        pattern = [cups(0.55, ANCHOR_BOX), cups(0.31, NEAR_BOX), {}, cups(0.31, ANCHOR_BOX)]
+        s, t = anchored_state(), T0 + 1
+        for i in range(200):
+            t += 0.1
+            s = tracker.update(s, pattern[i % len(pattern)], t)
+            self.assertTrue(s.seen, "lost 'seen' at step %d (score %.2f)" % (i, s.score))
+
+    def test_one_strong_hit_is_seen(self):
+        s = anchored_state()
+        self.assertEqual(s.score, config.HIT_STRONG)
+        self.assertTrue(s.seen)
+
+    def test_weak_hits_alone_need_several_frames(self):
+        s = tracker.update(anchored_state(), {}, T0 + 10)  # score drained to 0
+        self.assertFalse(s.seen)
+        s = tracker.update(s, cups(0.35, NEAR_BOX), T0 + 10.1)
+        self.assertFalse(s.seen)  # 0.3 < SEEN_SCORE
+        for i in range(3):
+            s = tracker.update(s, cups(0.35, NEAR_BOX), T0 + 10.2 + i * 0.1)
+        self.assertTrue(s.seen)  # 4 x 0.3 = 1.2
+
+    def test_score_is_capped(self):
+        frames = [(T0 + 1 + i * 0.1, cups(0.9, ANCHOR_BOX)) for i in range(100)]
+        s = run(tracker.new_state(T0), frames)
+        self.assertEqual(s.score, config.SCORE_MAX)
+
+    def test_score_drains_by_time_not_by_call_count(self):
+        full = run(tracker.new_state(T0), [(T0 + 1 + i * 0.1, cups(0.9, ANCHOR_BOX)) for i in range(10)])
+        one_call = tracker.update(full, {}, full.last_update_time + 2)
+        many = run(full, [(full.last_update_time + 0.1 * (i + 1), {}) for i in range(20)])
+        self.assertAlmostEqual(one_call.score, many.score)
+
+    def test_lost_timer_starts_when_score_drops(self):
+        # Score at the cap -> stays "seen" for a while after the cup goes.
+        frames = [(T0 + 1 + i * 0.1, cups(0.9, ANCHOR_BOX)) for i in range(50)]
+        s = run(tracker.new_state(T0), frames)
+        t_gone = s.last_update_time
+        drain = (config.SCORE_MAX - config.SEEN_SCORE) / config.DECAY_PER_SEC
+        ticks = [(t_gone + 0.5 * (i + 1), frame(person=True)) for i in range(int((drain + config.N_SECONDS) / 0.5) + 2)]
+        s = run(s, ticks)
+        self.assertTrue(s.lost)
+
+    def test_score_flag_off_uses_visibility_window(self):
+        with mock.patch.object(config, "USE_EVIDENCE_SCORE", False):
+            s = tracker.update(anchored_state(), {}, T0 + 1 + config.CUP_VISIBLE_SEC - 0.1)
+            self.assertTrue(s.seen)
+            s = tracker.update(s, {}, T0 + 1 + config.CUP_VISIBLE_SEC + 0.1)
+            self.assertFalse(s.seen)
+
+
 class TestTexts(unittest.TestCase):
     def test_answer_never_seen(self):
         s = tracker.new_state(T0)
