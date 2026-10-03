@@ -6,6 +6,7 @@
 import os
 import sys
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
@@ -170,6 +171,110 @@ class TestLabelsAndPerson(unittest.TestCase):
         self.assertFalse(s.me_in_view)
 
 
+ANCHOR_BOX = (300, 300, 360, 380)
+NEAR_BOX = (305, 302, 365, 382)    # centre ~5 px from the anchor
+FAR_BOX = (20, 20, 80, 100)        # centre ~400 px away
+
+
+def cups(conf, box, person=False):
+    d = {"cup": [det("cup", box, conf)]}
+    if person:
+        d["person"] = [det("person", (200, 0, 400, 480))]
+    return d
+
+
+def anchored_state():
+    """State right after one confident cup set the anchor at ANCHOR_BOX."""
+    return tracker.update(tracker.new_state(T0), cups(0.8, ANCHOR_BOX), T0 + 1)
+
+
+class TestAcceptance(unittest.TestCase):
+    def test_lone_weak_cup_far_from_anchor_is_ignored(self):
+        s = tracker.update(anchored_state(), cups(0.35, FAR_BOX), T0 + 2)
+        self.assertEqual(s.last_cup.box, ANCHOR_BOX)  # unchanged
+        self.assertFalse(s.cup_decisions[0]["accepted"])
+        self.assertIn("px from anchor", s.cup_decisions[0]["reason"])
+
+    def test_lone_weak_cup_with_no_anchor_is_ignored(self):
+        s = tracker.update(tracker.new_state(T0), cups(0.35, NEAR_BOX), T0 + 1)
+        self.assertIsNone(s.last_cup)
+        self.assertIn("no anchor", s.cup_decisions[0]["reason"])
+
+    def test_weak_cup_near_anchor_is_accepted(self):
+        s = tracker.update(anchored_state(), cups(0.35, NEAR_BOX), T0 + 2)
+        self.assertEqual(s.last_cup.box, NEAR_BOX)
+        self.assertEqual(s.cup_decisions[0]["strength"], "weak")
+
+    def test_weak_cup_does_not_move_anchor(self):
+        s = tracker.update(anchored_state(), cups(0.35, NEAR_BOX), T0 + 2)
+        self.assertEqual(s.anchor_box, ANCHOR_BOX)
+        self.assertEqual(s.anchor_time, T0 + 1)
+
+    def test_person_boost_accepts_045_with_person(self):
+        s = tracker.update(tracker.new_state(T0), cups(0.45, FAR_BOX, person=True), T0 + 1)
+        self.assertIsNotNone(s.last_cup)
+        self.assertIn("person in view", s.cup_decisions[0]["reason"])
+
+    def test_person_boost_rejects_045_without_person(self):
+        s = tracker.update(tracker.new_state(T0), cups(0.45, FAR_BOX), T0 + 1)
+        self.assertIsNone(s.last_cup)
+
+    def test_person_boosted_hit_does_not_set_anchor(self):
+        s = tracker.update(tracker.new_state(T0), cups(0.45, FAR_BOX, person=True), T0 + 1)
+        self.assertIsNone(s.anchor_box)
+
+    def test_best_cup_strong_beats_weak(self):
+        d = {"cup": [det("cup", NEAR_BOX, 0.38), det("cup", FAR_BOX, 0.6)]}
+        s = tracker.update(anchored_state(), d, T0 + 2)
+        self.assertEqual(s.last_cup.box, FAR_BOX)
+
+    def test_flags_off(self):
+        with mock.patch.object(config, "USE_PERSON_BOOST", False):
+            s = tracker.update(tracker.new_state(T0), cups(0.45, FAR_BOX, person=True), T0 + 1)
+            self.assertIsNone(s.last_cup)
+        with mock.patch.object(config, "USE_ANCHOR", False):
+            s = tracker.update(anchored_state(), cups(0.35, NEAR_BOX), T0 + 2)
+            self.assertEqual(s.last_cup.box, ANCHOR_BOX)
+            self.assertIn("anchor off", s.cup_decisions[0]["reason"])
+
+
+class TestAnchorTTL(unittest.TestCase):
+    def phantom_frames(self, until):
+        """Steady 0.35 cup at the anchor, with me in view, every 0.5 s."""
+        frames, t = [], T0 + 1.5
+        while t <= until:
+            frames.append((t, cups(0.35, ANCHOR_BOX, person=True)))
+            t += 0.5
+        return frames
+
+    def test_phantom_counts_until_ttl(self):
+        end = T0 + 1 + config.ANCHOR_TTL_SECONDS
+        s = run(anchored_state(), self.phantom_frames(end))
+        self.assertEqual(tracker.anchor_status(s, end), "active")
+        self.assertTrue(s.seen)
+
+    def test_phantom_stops_counting_after_ttl_and_lost_fires(self):
+        ttl_end = T0 + 1 + config.ANCHOR_TTL_SECONDS
+        s = run(anchored_state(), self.phantom_frames(ttl_end + config.N_SECONDS + 10))
+        self.assertEqual(tracker.anchor_status(s, s.cup_decisions_time), "expired")
+        self.assertFalse(s.cup_decisions[0]["accepted"])
+        self.assertIn("anchor expired", s.cup_decisions[0]["reason"])
+        self.assertFalse(s.seen)
+        self.assertTrue(s.lost)
+
+    def test_ttl_flag_off_keeps_phantom_alive(self):
+        with mock.patch.object(config, "USE_ANCHOR_TTL", False):
+            ttl_end = T0 + 1 + config.ANCHOR_TTL_SECONDS
+            s = run(anchored_state(), self.phantom_frames(ttl_end + config.N_SECONDS + 10))
+            self.assertTrue(s.seen)
+            self.assertFalse(s.lost)
+
+    def test_anchor_not_restored_from_store(self):
+        stored = tracker.CupSighting("top left", ANCHOR_BOX, 0.9, T0 - 5)
+        s = tracker.new_state(T0, last_cup=stored)
+        self.assertEqual(tracker.anchor_status(s, T0), "none")
+
+
 class TestTexts(unittest.TestCase):
     def test_answer_never_seen(self):
         s = tracker.new_state(T0)
@@ -180,7 +285,10 @@ class TestTexts(unittest.TestCase):
         self.assertIn("right there, top left", tracker.answer_text(s, T0 + 1.5))
 
     def test_answer_minutes_ago(self):
-        s = tracker.update(tracker.new_state(T0), frame(cup_box=TOP_LEFT_BOX), T0 + 1)
+        s = run(tracker.new_state(T0), [
+            (T0 + 1, frame(cup_box=TOP_LEFT_BOX)),
+            (T0 + 1 + 300, {}),  # main.py ticks the tracker regularly
+        ])
         self.assertEqual(
             tracker.answer_text(s, T0 + 1 + 300),
             "Your coffee was last seen top left, 5 minutes ago.",

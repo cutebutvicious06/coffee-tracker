@@ -34,6 +34,26 @@ CONF_FLOOR = 0.3
 # A brand-new cup must reach this confidence to be accepted.
 CUP_START_CONF = 0.5
 
+# --- Smarter cup acceptance ------------------------------------------
+# Each USE_ flag switches one feature off so you can compare.
+
+# While a person is in view, accept a new cup from this confidence
+# (hands partly cover the cup, so confidence drops).
+USE_PERSON_BOOST = True
+CUP_START_CONF_WITH_PERSON = 0.4
+
+# The "anchor" is the box of the last confident cup (>= CUP_START_CONF).
+# A cup whose centre is within ANCHOR_NEAR_PX of the anchor's centre
+# only needs CUP_NEAR_ANCHOR_CONF.
+USE_ANCHOR = True
+CUP_NEAR_ANCHOR_CONF = 0.3
+ANCHOR_NEAR_PX = 40  # TODO(verify-on-board): about half a cup's width?
+
+# Anti-phantom: with no confident cup for this long, the anchor expires
+# and weak cups near it stop counting.
+USE_ANCHOR_TTL = True
+ANCHOR_TTL_SECONDS = 30.0  # TODO(verify-on-board)
+
 # Person must reach this to count as "in view".
 PERSON_MIN_CONF = 0.5  # TODO(verify-on-board)
 
