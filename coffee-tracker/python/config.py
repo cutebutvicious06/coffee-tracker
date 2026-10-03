@@ -28,6 +28,10 @@ CONFIDENCE = 0.5
 CUP_LABEL = "cup"
 PERSON_LABEL = "person"
 
+# Labels the model might give my cup. All become "cup" before the
+# tracker sees them. Trim this list using the debug panel's label counts.
+CUP_LABELS = ["cup", "vase", "wine glass", "bottle", "bowl"]  # TODO(verify-on-board)
+
 # --- Frame and zones -------------------------------------------------
 
 # Size of the coordinate space the boxes are reported in.

@@ -42,3 +42,4 @@ button { font-size: 1rem; padding: 6px 12px; margin-right: 6px; cursor: pointer;
 
 .debug { margin-top: 12px; }
 .debug pre { max-height: 300px; overflow: auto; background: #f0f0f0; padding: 8px; font-size: 0.8rem; }
+.debug h3 { font-size: 0.9rem; margin: 12px 0 4px; }

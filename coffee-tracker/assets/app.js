@@ -37,6 +37,7 @@ function showState(s) {
     $('lastTime').textContent = `${when} (${ago} s ago)`;
   }
 
+  showLabelCounts(s);
   $('debugSummary').textContent =
     `me in view: ${s.me_in_view} | cup absent: ${s.cup_absent_sec.toFixed(1)} s | lost: ${s.lost}`;
   if (s.last_raw_time) {
@@ -45,11 +46,28 @@ function showState(s) {
     const lines = [];
     for (const [label, dets] of Object.entries(s.last_raw)) {
       for (const d of dets) {
-        lines.push(`${label}  ${d.confidence.toFixed(2)}  [${d.bounding_box_xyxy.join(', ')}]`);
+        // "cup (vase)" when the model's own label was different
+        const name = d.label && d.label !== label ? `${label} (${d.label})` : label;
+        lines.push(`${name}  ${d.confidence.toFixed(2)}  [${d.bounding_box_xyxy.join(', ')}]`);
       }
     }
     $('debugRaw').textContent = `last detections (${age} s ago):\n` + lines.join('\n');
   }
+}
+
+// --- Label counts ------------------------------------------------------
+// Every raw label the model has reported since the app started, most
+// common first. Labels in CUP_LABELS are marked "-> cup".
+function showLabelCounts(s) {
+  if (!s.label_counts) return;
+  const rows = Object.entries(s.label_counts).sort((a, b) => b[1] - a[1]);
+  $('labelCounts').textContent = rows.length === 0 ? 'No labels yet' : rows
+    .map(([label, n]) => {
+      const tag = label === 'person' ? '-> person'
+        : s.cup_labels.includes(label) ? '-> cup' : '(dropped)';
+      return `${String(n).padStart(6)}  ${label}  ${tag}`;
+    })
+    .join('\n');
 }
 
 // --- Answer + speech ---------------------------------------------------

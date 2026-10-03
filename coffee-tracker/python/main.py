@@ -10,6 +10,7 @@ from arduino.app_bricks.video_objectdetection import VideoObjectDetection
 from arduino.app_bricks.keyword_spotting import KeywordSpotting
 
 import config
+import labels
 import store
 import tracker
 
@@ -32,8 +33,14 @@ def apply(detections):
             saved = state.last_cup
 
 
+label_counts = {}  # every raw label seen, for the debug panel
+
+
 def on_detections(detections: dict):
-    apply(detections)
+    global label_counts
+    with lock:
+        label_counts = labels.count_labels(label_counts, detections)
+    apply(labels.normalize_detections(detections))
 
 
 def send_answer():
@@ -59,7 +66,10 @@ def loop():
     # The brick sends nothing when it sees nothing, so tick the timer
     # with an empty frame, then push the latest state to the page.
     apply({})
-    ui.send_message("state", tracker.to_dict(state, time.time()))
+    message = tracker.to_dict(state, time.time())
+    message["label_counts"] = label_counts
+    message["cup_labels"] = config.CUP_LABELS
+    ui.send_message("state", message)
     time.sleep(config.TICK_SEC)
 
 
