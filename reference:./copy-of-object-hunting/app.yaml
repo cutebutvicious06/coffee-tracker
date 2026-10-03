@@ -1,0 +1,7 @@
+name: Copy of Object Hunting
+description: Detect a list of object to win the game
+ports: []
+bricks:
+- arduino:video_object_detection: {}
+- arduino:web_ui: {}
+icon: 🔍
