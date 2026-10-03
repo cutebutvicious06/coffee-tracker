@@ -36,9 +36,28 @@ def new_state(now, last_cup=None):
     return State(started_at=now, last_cup=last_cup)
 
 
+def filter_labels(detections):
+    """Keep only cup and person (if FILTER_LABELS is on)."""
+    if not config.FILTER_LABELS:
+        return detections
+    keep = (config.CUP_LABEL, config.PERSON_LABEL)
+    return {label: dets for label, dets in detections.items() if label in keep}
+
+
+def confident_persons(detections):
+    """Person detections at or above PERSON_MIN_CONF."""
+    return [
+        d for d in detections.get(config.PERSON_LABEL, [])
+        if d.get("confidence", 0.0) >= config.PERSON_MIN_CONF
+    ]
+
+
 def best_cup(detections):
     """Highest-confidence cup detection, or None if no cup."""
-    cups = detections.get(config.CUP_LABEL, [])
+    cups = [
+        d for d in detections.get(config.CUP_LABEL, [])
+        if d.get("confidence", 0.0) >= config.CUP_START_CONF
+    ]
     if not cups:
         return None
     return max(cups, key=lambda d: d.get("confidence", 0.0))
@@ -51,6 +70,8 @@ def update(state, detections, now):
     the brick sends nothing when it sees nothing, so an empty dict is
     how "not seen" reaches the timer.
     """
+    detections = filter_labels(detections)
+
     # 1. Cup: remember where/when, whether or not I'm in view.
     last_cup = state.last_cup
     cup = best_cup(detections)
@@ -64,7 +85,8 @@ def update(state, detections, now):
         )
 
     # 2. Me: in view if seen within the last PERSON_TIMEOUT_SEC.
-    last_me_time = now if is_me(detections) else state.last_me_time
+    persons = confident_persons(detections)
+    last_me_time = now if is_me({config.PERSON_LABEL: persons}) else state.last_me_time
     me_in_view = (
         last_me_time is not None and now - last_me_time <= config.PERSON_TIMEOUT_SEC
     )

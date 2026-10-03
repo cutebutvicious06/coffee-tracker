@@ -24,9 +24,21 @@ TICK_SEC = 0.5
 
 # --- Detection -------------------------------------------------------
 
-CONFIDENCE = 0.5
 CUP_LABEL = "cup"
 PERSON_LABEL = "person"
+
+# The brick passes everything at or above this; tracker.py applies the
+# real thresholds below. Low floor = tracker gets to see weak cups.
+CONF_FLOOR = 0.3
+
+# A brand-new cup must reach this confidence to be accepted.
+CUP_START_CONF = 0.5
+
+# Person must reach this to count as "in view".
+PERSON_MIN_CONF = 0.5  # TODO(verify-on-board)
+
+# Drop every label except cup and person before the tracker sees it.
+FILTER_LABELS = True
 
 # --- Frame and zones -------------------------------------------------
 

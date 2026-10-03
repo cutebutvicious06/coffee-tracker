@@ -148,6 +148,28 @@ class TestLost(unittest.TestCase):
         self.assertAlmostEqual(s.cup_absent_sec, 1.0)
 
 
+class TestLabelsAndPerson(unittest.TestCase):
+    def test_other_labels_are_dropped(self):
+        d = frame(cup_box=TOP_LEFT_BOX)
+        d["chair"] = [det("chair", (0, 0, 5, 5))]
+        s = tracker.update(tracker.new_state(T0), d, T0 + 1)
+        self.assertNotIn("chair", s.last_raw)
+
+    def test_only_chairs_counts_as_empty(self):
+        s = tracker.update(tracker.new_state(T0), {"chair": [det("chair")]}, T0 + 1)
+        self.assertEqual(s.last_raw, {})
+
+    def test_cup_below_start_conf_is_ignored(self):
+        d = {"cup": [det("cup", TOP_LEFT_BOX, config.CUP_START_CONF - 0.01)]}
+        s = tracker.update(tracker.new_state(T0), d, T0 + 1)
+        self.assertIsNone(s.last_cup)
+
+    def test_weak_person_is_not_in_view(self):
+        d = {"person": [det("person", confidence=config.PERSON_MIN_CONF - 0.01)]}
+        s = tracker.update(tracker.new_state(T0), d, T0 + 1)
+        self.assertFalse(s.me_in_view)
+
+
 class TestTexts(unittest.TestCase):
     def test_answer_never_seen(self):
         s = tracker.new_state(T0)
